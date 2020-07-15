@@ -1,0 +1,142 @@
+/**
+ * sdk 打包 gradle脚本
+ * 修改记录:
+ * <li>20190910: 增加多渠道打包支持，使用assembleRelease直接触发打包
+ *
+ * 使用步骤:
+ * <li>0. 将本文件放在sdk module的根目录,即build.gradle的同级目录
+ * <li>1. 在sdk层的build.gradle的dependencies 上面加入<code>apply from:'package.gradle'</code>
+ * <li>2. 使用<code>myConfig xxx</code>表示xxx依赖需要被打包
+ * <li>3. 使用<code>assembleXXXRelease</code>命令自动打包
+ * <li>4. 使用<code>myConfig project(path: ':sdk_library', configuration: 'default')} 抽取工程依赖</code>
+ *
+ * 说明:
+ * <li>0. 只适用于aar的编译!默认只hook assembleXXXRelease方法!!
+ * <li>1. 打包sdk默认放在<code>'{module}/build/outputs/{module-name}/' </code>目录下
+ * <li>2. sdk 命名规则参考:headcount-release_v0.1.0.01.01
+ * <li>3. 打包的sdk分为 jar包、依赖、so、assets、res、Manifest
+ * <li>4. 打包的sdk使用assembleRelease生成，因此默认是release版本
+ * <li>5. 增加git支持,强制附加使用commit-id
+ * <li>6. 增加zip打包支持
+ * <li>7. 默认hook <code>assembleXXXRelease</code>进行打包!
+ * <li>8. 20190910 支持flavor打多渠道包
+ */
+
+// region git
+/**
+ * 获取commit id
+ * @return
+ */
+static def getCommitId() {
+    def cmd_git_commit = 'git rev-parse --short HEAD'
+    return cmd_git_commit.execute().text.trim()
+}
+
+def rootDir = project.getRootProject().getRootDir().toString();
+
+// endregion git
+
+// region build.gradle
+task renameTask {
+    println("package::rename ->:begin")
+    // apk打包
+
+    // 对<gradle-5.0+>可能不生效 需要修改为 <gradle-4.4-all.zip>
+    // 修改aar包名->  xxx_sdk-release-1.10.1_3-0123asd-net.aar
+    android.libraryVariants.all { variant ->
+
+        variant.outputs.all { output ->
+            def f = output.outputFileName
+            if (f != null && f.endsWith('.aar')) {
+                def flavor = variant.flavorName // 渠道
+                def versionName = android.defaultConfig.versionName // version name
+                def versionCode = android.defaultConfig.versionCode // version code
+                def commit = getCommitId()  // commit id
+                def fileName
+                // 如果不是多渠道包
+                if (flavor == null || "".equals(flavor)) {
+                    fileName = "${rootProject.name.toLowerCase()}-${project.name}-${variant.name}-${versionName}_${versionCode}-${commit}.aar"
+                }
+                // 如果是多渠道包
+                else {
+                    fileName = "${rootProject.name.toLowerCase()}-${project.name}-${variant.name}-${versionName}_${versionCode}-${commit}-${flavor}.aar"
+                }
+                output.outputFileName = fileName
+                println("package::rename ->:end file name = ${fileName}")
+            }
+        }
+    }
+}
+
+// endregion build.gradle
+
+
+// 使用myConfig 重复依赖 来 提取依赖
+// Add a new configuration to hold your dependencies
+configurations {
+    myConfig
+}
+
+// region TASKS
+/**
+ * 所有 独立，hook在assembleDebug后
+ * 独立判断是否为flavor版本
+ */
+
+// 复制三方依赖
+task copyLibs() {
+    doFirst {
+        println("package::copyLibs ->:begin,from:${configurations.myConfig}")
+    }
+
+    doLast {
+        copy {
+            from(configurations.myConfig)
+            into("${rootDir}/build/3rdpart/")
+        }
+        println("package::copyLibs ->:end")
+    }
+
+}
+
+// 复制aar
+task copyAAR() {
+    doFirst {
+        println("package::copyAAR ->:begin")
+    }
+    def debug = "release"
+    println("rk ${rootDir}")
+    doLast {
+        copy {
+            from("./build/outputs/aar/")
+            into("${rootDir}/build/sdk")
+            include("*${debug}*.aar")
+        }
+    }
+}
+
+
+// 打包脚本链接
+task _wrapTask {
+    dependsOn copyLibs, copyAAR
+}
+
+// endregion tasks
+
+// region hook
+/**
+ * 打包结束后
+ */
+afterEvaluate {
+    tasks.matching {
+        it.name.startsWith('assemble') && it.name.endsWith('Release')
+    }.each { task ->
+        // 插入TASK
+        task.finalizedBy(_wrapTask)
+        task.doLast {
+            println("package::hook : ${task.name}")
+        }
+    }
+}
+
+// endregion hook

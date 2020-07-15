@@ -1,0 +1,3 @@
+rootProject.name='YuvLibrary-Android'
+include ':app'
+include ':libyuv'
