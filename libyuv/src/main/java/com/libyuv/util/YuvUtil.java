@@ -474,14 +474,18 @@ public class YuvUtil {
      * @param stStrideV
      * @return
      */
-    public static int yuvAndroidImageToI420(Image image, byte[] dstY, int dstOffsetY, int dstStrideY,
-                                            byte[] dstU, int dstOffsetU, int dstStrideU,
-                                            byte[] dstV, int dstOffsetV, int stStrideV) {
+    public static int yuvAndroid420ToI420(Image image, byte[] dstY, int dstOffsetY, int dstStrideY,
+                                          byte[] dstU, int dstOffsetU, int dstStrideU,
+                                          byte[] dstV, int dstOffsetV, int stStrideV) {
         Image.Plane[] planes = image.getPlanes();
-
-        return yuvAndroid420ToI420(planes[0].getBuffer(), planes[0].getRowStride(),
+        return yuvAndroid420ToI420(planes[0].getBuffer(),
+                planes[0].getRowStride(),
                 planes[1].getBuffer(), planes[1].getRowStride(),
                 planes[2].getBuffer(), planes[2].getRowStride(),
-                planes[1].getPixelStride(), dstY, dstOffsetY, dstStrideY, dstU, dstOffsetU, dstStrideU, dstV, dstOffsetV, dstOffsetV, image.getWidth(), image.getHeight());
+                planes[1].getPixelStride(),
+                dstY, dstOffsetY, dstStrideY,
+                dstU, dstOffsetU, dstStrideU,
+                dstV, dstOffsetV, stStrideV,
+                image.getWidth(), image.getHeight());
     }
 }
